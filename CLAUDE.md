@@ -93,7 +93,7 @@ For feature work and refactors (not trivial fixes):
 For one-line fixes and typos: skip the changelog.
 
 ## Git
-Never auto-commit or push. Never stage files without being asked. When a task is done, ask: "Shall I prepare the commit message?" When asked, provide a ready-to-copy block:
+Never auto-commit or push, never stage files without being asked. When a task is done, prepare a relevant  commit message, ready to copy for the user. Never add `Co-Authored-By: Claude` (or any other LLM/AI attribution trailer) to commit messages. 
 
 ```bash
 git add <files>
