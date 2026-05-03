@@ -1,98 +1,115 @@
-# Project instructions — `mcp-personal-onedrive`
+# Project Instructions
 
 Canonical instructions for AI coding agents working in this repository. Claude Code reads this file directly as project memory. Other agents (Cursor, Codex, etc.) reach it via the one-line `AGENTS.md` pointer.
-
-This repo is a **standalone Python project** — it intentionally does not share a `.venv` or `requirements.txt` with the parent `automation` monorepo.
-
-## What this project is
-A minimal, read-only **Model Context Protocol (MCP) server** that lets Claude (Desktop, Code, web, mobile) browse and read files in a **personal Microsoft account's OneDrive**. The official Microsoft 365 connector for Claude only supports work/school tenants — this server fills the gap for consumer (`outlook.com`, `hotmail.com`, `live.com`) accounts.
-
-It can run two ways:
-- **stdio** — for Claude Desktop and Claude Code on the same machine. Simplest.
-- **Streamable HTTP behind a single-user OAuth 2.1 gateway** — for claude.ai web and mobile, exposed via Tailscale Funnel.
-
-The actual setup is described in [`README.md`](README.md) → "Configuration and testing".
 
 ## Plan mode is the default
 Every non-trivial request starts in plan mode. Non-trivial = anything beyond a one-line fix, a typo, or a question I can answer without touching code.
 
 In plan mode:
-- Do NOT edit files, run destructive commands, or commit anything.
-- Investigate the codebase as needed (read files, search, run read-only commands).
-- Resolve ambiguity through questions before proposing a plan.
-- Present the plan only when you're confident it reflects what I actually want.
-- Stay in plan mode across rejections — if I push back, revise and re-present.
+- Do NOT edit files, run destructive commands, or commit anything
+- Investigate the codebase as needed (read files, search, run read-only commands)
+- Resolve ambiguity through questions before proposing a plan
+- Present the plan only when you're confident it reflects what I actually want
+- Stay in plan mode across rejections — if I push back, revise and re-present, don't bail out to execution
 
 Recommended setting in `.claude/settings.json`:
 ```json
 { "permissions": { "defaultMode": "plan" } }
 ```
 
-Exit plan mode only after I explicitly approve.
+Exit plan mode only after I explicitly approve. Approval transitions straight to execution in the same turn.
 
 ## Asking questions
-Ask whenever a decision would be expensive to undo or genuinely ambiguous. One sharp question beats three filler ones. Use multi-choice (2–4 options) when the choice space is bounded.
+Ask whenever a decision would be expensive to undo or genuinely ambiguous. One sharp question beats three filler ones. Use multi-choice (2-4 options) when the choice space is bounded — much faster for me to answer than prose.
 
 **Always ask before assuming** any of these:
-- Whether to widen scopes (this server is read-only by design).
-- Where new tools should live (graph_client.py vs server.py vs a new module).
-- Anything that touches the OAuth gateway — the security-critical core.
-- Whether to add tests, and at what level.
+- File or module location for new code
+- Data shape or schema
+- Page placement (new page vs. section in existing page)
+- `st.session_state` key names and scope (Streamlit projects)
+- Caching strategy (`@st.cache_data` TTL vs. `@st.cache_resource`) (Streamlit projects)
+- Widget `key=` names and input sources (Streamlit projects)
+- Data source (upload, local file, DB via secrets)
+- Error and empty-state handling
+- Whether to add tests, and at what level
 
-**Don't ask about** things you can determine by reading the code, things I've already specified, or process meta-questions like "is the plan ready?".
+**Don't ask about** things you can determine by reading the code, things I've already specified, or process meta-questions like "is the plan ready?" — that's what plan approval is for.
+
+If multiple reasonable approaches exist, present them as options with tradeoffs. Don't pick silently.
 
 ## Before editing
-- Re-read any file before modifying it.
+- Re-read any file before modifying it. Don't trust memory across long sessions.
 - For files >500 LOC, read in chunks; don't assume you've seen the whole file.
-- When renaming a symbol, search separately for: direct calls, type references, string literals, docs in `README.md`, and config keys in `.env.sample`.
+- When renaming a symbol, search separately for: direct calls, type references, string literals, dynamic imports, re-exports, and tests.
 
-## Conventions
-- **Layout:** `src/onedrive_mcp/` is the only package. No mirrored top-level package.
-- **Config & secrets:** `.env` at repo root, never committed. Schema in `.env.sample`. `.token_cache.bin` and `.oauth_state.json` are runtime files — gitignored.
-- **Logging:** Python `logging`. Never log access tokens, refresh tokens, JWTs, or the gateway password. Logs go to **stderr** — stdout is reserved for MCP stdio JSON-RPC traffic.
-- **Naming:** snake_case for files/functions, PascalCase for classes, UPPER_CASE for constants.
+## General conventions
+- **Project layout** is documented in this repo's `README.md`. Don't assume `/app/`, `/src/`, `launch_app.bat`, or any specific paths exist — read the README first.
+- **Config & secrets:** project config in `config.json` or similar; secrets always in `.env`, never committed. The canonical name for the env file is `.env` (not `venv` or anything else — `.venv` is the venv directory).
+- **Logging:** use the language's logging facility. In Python that's `logging`, not `print()`. Emojis are welcome in log messages: ℹ️ ⚠️ ❌ ✅
+- **Naming:** snake_case for files/functions (Python), PascalCase for classes, UPPER_CASE for constants.
 - **Imports:** stdlib → third-party → local.
-- **Versioning:** `requirements.txt` uses lower bounds (`>=`); keep that style.
-- **Virtual environment:** the local `.venv` only. Never create `venv`. Invoke directly with `& .\.venv\Scripts\python.exe ...`.
+- **Versioning policy:** follow the existing style in `requirements.txt` / `package.json` — keep `==` where the file uses pins, keep `>=` where it uses lower bounds. Don't change the policy unless explicitly asked.
+- **Virtual environment:** use the existing `.venv`. Never create `venv`. Never activate — invoke via `& .\.venv\Scripts\python.exe ...` on Windows, `./.venv/bin/python ...` on POSIX.
 - **No hardcoded paths or credentials.**
-- **Type hints** on all public functions. Use `Optional[T]`, never bare `None` returns.
+- **Type hints** on all public Python functions. Use `Optional[T]`, never bare `None` returns.
 - Implement only what was asked. No nice-to-haves.
 
-## Read-only scope
-This server intentionally does NOT support upload, rename, delete, share-link creation, or any other write operation. Microsoft Graph scopes are pinned to `Files.Read User.Read offline_access`. Adding write capability requires:
-1. A separate scope set (`Files.ReadWrite`).
-2. A separate launcher / mode (`--http-write`?), so the read-only deployment isn't silently widened.
-3. Explicit user approval — do not infer this from the brief.
+## Streamlit conventions
+*Apply only if this project uses Streamlit.*
 
-If a request implies a write operation, **stop and ask**.
+- `st.set_page_config(layout="wide", page_title="...")` MUST be the first Streamlit call.
+- Use `width="stretch"` (and `width="content"` where appropriate) in new and modified code. **Never** introduce new `use_container_width=True` — it is deprecated. When you touch existing code that uses `use_container_width`, migrate it.
+- All mutable state in `st.session_state`. No module-level globals.
+- `@st.cache_data` for DataFrames/files; `@st.cache_resource` for DB clients/models.
+- Every widget needs a stable, explicit `key=`.
+- UI code only in the UI directory (e.g. `app/`). Data logic stays in the non-UI package (e.g. `src/`). Never import `streamlit` from non-UI code.
+- User feedback via `st.error()` / `st.warning()` / `st.success()`, not `st.write()`.
+- **App layout:** main file (e.g. `app.py`) handles only page config, shared state, sidebar, and tab/radio routing. Each tab/mode lives in its own file exposing a `main(...)` (or `render_*`) function. Default to `st.tabs()`; use a sidebar radio only when asked.
 
-## Security expectations
-- The OAuth gateway is the only thing standing between the public internet and the user's OneDrive when run via Funnel. Treat any change in `auth_oauth.py` with extra care.
-- PKCE (S256) is mandatory; do not weaken it.
-- Bearer middleware MUST emit RFC 9728 `WWW-Authenticate: Bearer resource_metadata=...` on 401.
-- JWT signing key lives in `.oauth_state.json` (HS256). If you ever need to rotate it, document the user-facing impact (all connectors must re-auth).
-- Rate-limit failed login attempts. Don't add log lines that print the password or the JWT.
-
-## Phased execution
-Multi-file refactors don't go in a single response. Break into phases of ≤5 files each. Complete phase 1, run `py_compile`, wait for approval, then phase 2.
+## Phased execution for larger work
+Multi-file refactors don't go in a single response. Break into phases of ≤5 files each. Complete phase 1, run verification, wait for my approval, then phase 2. Same rule for any task you'd estimate at >30 minutes of work.
 
 ## Verification (before declaring a task done)
-Windows / PowerShell:
-- Syntax: `& .\.venv\Scripts\python.exe -m py_compile <files>`
-- Imports: `& .\.venv\Scripts\python.exe -c "import onedrive_mcp.server, onedrive_mcp.auth_oauth, onedrive_mcp.graph_client"`
-- HTTP smoke (no MS account needed): start `--http`, curl `/.well-known/oauth-authorization-server`, curl `/mcp` (expect 401), curl `/.well-known/oauth-protected-resource`.
+Examples — adapt to the project's actual tooling:
 
-If you change graph_client behavior, also run `--self-test` and verify the root listing still works (requires the user's signed-in cache).
+Windows / PowerShell:
+- Syntax: `& .\.venv\Scripts\python.exe -m py_compile <file>`
+- Lint (if configured): `ruff check .`
+- Tests (if any exist): `& .\.venv\Scripts\python.exe -m pytest`
+- Streamlit boot check (UI changes): `& .\.venv\Scripts\python.exe -m streamlit run app/app.py --server.headless true`
+
+POSIX:
+- Syntax: `./.venv/bin/python -m py_compile <file>`
+- Tests: `./.venv/bin/python -m pytest`
+
+If no checker exists for a project, say so explicitly. Don't claim "tests pass" when there are no tests.
 
 ## Documentation discipline
-For feature work and refactors:
-- Update `README.md` if usage, config, or transport changed.
-- This repo does not maintain a `docs/` folder for changelogs — the README is the single source of truth for the user-facing setup. Don't create `docs/` for one-off notes.
+For feature work and refactors (not trivial fixes):
+- Update `README.md` if usage, config, or output changed
+- If the project already has a `docs/` folder, add `docs/YYYY-MM-DD-short-description.md` with: what was done, files modified, validation run
+- Don't create a `docs/` folder just to file a changelog entry on a one-off task
 
-For one-line fixes and typos: skip the README update.
+For one-line fixes and typos: skip the changelog.
 
 ## Git
-Never auto-commit or push. Never stage files without being asked. When a task is done, ask: "Shall I prepare the commit message?" When asked, provide a ready-to-copy block; the user runs it.
+Never auto-commit or push. Never stage files without being asked. When a task is done, ask: "Shall I prepare the commit message?" When asked, provide a ready-to-copy block:
+
+```bash
+git add <files>
+git commit -m "type: short description
+
+- detail 1
+- detail 2"
+```
+
+I run it in my own terminal.
 
 ## Senior-dev check
 Before finishing, ask: "What would a senior, perfectionist dev reject in review?" If the answer points at duplicated state, inconsistent patterns, or broken architecture *within the file you're already editing*, fix it. Don't expand scope to unrelated files.
+
+---
+
+## This repository
+Read-only Model Context Protocol server exposing a personal Microsoft account's OneDrive to Claude. Runs in two modes: stdio (Claude Desktop / Claude Code) and Streamable HTTP behind a single-user OAuth 2.1 gateway (claude.ai web and mobile, exposed via Tailscale Funnel).
+See `README.md` for setup, layout, and usage.
