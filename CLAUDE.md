@@ -102,7 +102,7 @@ When work for an issue is finished, close the issue properly:
 - If completed via direct commits, close the issue manually and paste the relevant commit SHA(s) in a closing comment.
 
 ## Git
-Never auto-commit or push, never stage files without being asked. When a task is done, prepare a relevant  commit message, ready to copy for the user. Never add `Co-Authored-By: Claude` (or any other LLM/AI attribution trailer) to commit messages. 
+Never auto-commit or push, never stage files without being asked. When a task is done, prepare a relevant commit message, ready to copy for the user. Never add `Co-Authored-By: Claude` (or any other LLM/AI attribution trailer) to commit messages.
 
 ```bash
 git add <files>
