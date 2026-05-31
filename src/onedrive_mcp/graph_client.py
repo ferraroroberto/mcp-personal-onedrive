@@ -246,9 +246,19 @@ class GraphClient:
             )
         download_url = meta.get("@microsoft.graph.downloadUrl")
         if not download_url:
-            # Fall back to /content (follows redirect to a pre-signed URL).
+            # Fall back to /content — Graph responds with a 302 to a pre-signed
+            # URL; we must follow the redirect ourselves (httpx defaults to
+            # follow_redirects=False) and send the bearer token because /content
+            # is an authenticated endpoint (unlike the pre-signed URL branch).
             download_url = f"{meta_url}/content"
-            response = self._request("GET", download_url)
+            response = self._client.get(
+                download_url, headers=self._headers(), follow_redirects=True
+            )
+            if response.status_code >= 400:
+                raise GraphError(
+                    response.status_code,
+                    f"Download failed: HTTP {response.status_code}",
+                )
         else:
             # The pre-signed URL is unauthenticated; do not send our bearer.
             response = self._client.get(download_url, follow_redirects=True)
