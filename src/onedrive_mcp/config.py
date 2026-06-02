@@ -33,7 +33,7 @@ class Settings:
         return bool(self.oauth_password and self.public_url and self.jwt_secret)
 
 
-def _resolve_path(value: str, default_name: str) -> Path:
+def _resolve_path(value: str) -> Path:
     p = Path(value).expanduser()
     if not p.is_absolute():
         p = PROJECT_ROOT / p
@@ -52,11 +52,9 @@ def load_settings(*, require_http: bool = False) -> Settings:
 
     token_cache_path = _resolve_path(
         os.getenv("ONEDRIVE_TOKEN_CACHE_PATH", ".token_cache.bin"),
-        ".token_cache.bin",
     )
     oauth_state_path = _resolve_path(
         os.getenv("MCP_OAUTH_STATE_PATH", ".oauth_state.json"),
-        ".oauth_state.json",
     )
 
     oauth_password = os.getenv("MCP_OAUTH_PASSWORD") or None
