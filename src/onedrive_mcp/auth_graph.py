@@ -86,12 +86,3 @@ class GraphAuth:
             self._save_cache()
             return result["access_token"]
 
-    def has_cached_account(self) -> bool:
-        with self._lock:
-            return bool(self._app.get_accounts())
-
-    def sign_out(self) -> None:
-        with self._lock:
-            for account in self._app.get_accounts():
-                self._app.remove_account(account)
-            self._save_cache()
