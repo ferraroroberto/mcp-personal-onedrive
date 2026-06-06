@@ -94,20 +94,20 @@ This is the **app registration** Microsoft requires for any program that signs u
    - **Name:** `Claude Personal OneDrive MCP` (anything you like — only you see this)
    - **Supported account types:** **"Personal Microsoft accounts only"**
      > This is the critical setting. If you pick "any tenant" the `/consumers` authority will reject the token.
-   - **Redirect URI:** leave blank for now — we'll add two of them in step 1.3.
+   - **Redirect URI:** leave blank for now — we'll add it in step 1.3.
 4. Click **Register**.
 
 ### 1.2 Copy the client ID
 
 On the app's **Overview** page, copy **Application (client) ID**. You'll paste it into `.env` in a moment.
 
-### 1.3 Add redirect URIs
+### 1.3 Add redirect URI
 
 Still on the app page → left sidebar → **Authentication** → **+ Add a platform** → **Mobile and desktop applications** → tick `http://localhost` → **Configure**.
 
 Then back on the same Authentication page, scroll down to **Advanced settings** and confirm **"Allow public client flows"** is **Yes**. Save if you changed it.
 
-> Why two? `http://localhost` (no port) is what MSAL uses for the desktop interactive sign-in (`--self-test`). It's a "public client / native" redirect.
+> `http://localhost` (no port) is what MSAL uses for the desktop interactive sign-in (`--self-test`). It's a "public client / native" redirect.
 
 ### 1.4 Add API permissions
 
