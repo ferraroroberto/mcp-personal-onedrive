@@ -289,13 +289,21 @@ class OAuthGateway:
             status_code=201,
         )
 
+    def _client_display_name(self, client_id: str) -> Optional[str]:
+        """Return the registered human-readable client_name, or None if not found."""
+        client = self._clients.get(client_id)
+        return client.client_name if client is not None else None
+
     async def _handle_authorize(self, request: Request) -> Response:
         if request.method == "GET":
             params = dict(request.query_params)
             err = self._validate_authorize_params(params)
             if err:
                 return _oauth_error_response(*err, 400)
-            return HTMLResponse(_render_login(params))
+            return HTMLResponse(_render_login(
+                params,
+                client_name=self._client_display_name(params.get("client_id", "")),
+            ))
 
         # POST
         form = await request.form()
@@ -307,12 +315,14 @@ class OAuthGateway:
         if err:
             return _oauth_error_response(*err, 400)
 
+        display_name = self._client_display_name(params.get("client_id", ""))
+
         if not self._check_rate_limit():
-            return HTMLResponse(_render_login(params, error="Too many attempts. Wait a minute and try again."), status_code=429)
+            return HTMLResponse(_render_login(params, client_name=display_name, error="Too many attempts. Wait a minute and try again."), status_code=429)
 
         password = form.get("password", "")
         if not isinstance(password, str) or not hmac.compare_digest(password, self._password):
-            return HTMLResponse(_render_login(params, error="Wrong password."), status_code=401)
+            return HTMLResponse(_render_login(params, client_name=display_name, error="Wrong password."), status_code=401)
 
         code = secrets.token_urlsafe(32)
         record = _AuthCode(
@@ -469,7 +479,12 @@ button { width: 100%; padding: 0.7rem; margin-top: 1rem; background: #4a90e2; co
 """
 
 
-def _render_login(params: dict[str, str], *, error: Optional[str] = None) -> str:
+def _render_login(
+    params: dict[str, str],
+    *,
+    client_name: Optional[str] = None,
+    error: Optional[str] = None,
+) -> str:
     hidden_keys = ("response_type", "client_id", "redirect_uri", "code_challenge",
                    "code_challenge_method", "scope", "state")
     hidden = "\n    ".join(
@@ -477,8 +492,8 @@ def _render_login(params: dict[str, str], *, error: Optional[str] = None) -> str
         for k in hidden_keys
     )
     err = f'<div class="error">{html.escape(error)}</div>' if error else ""
-    client_name = html.escape(params.get("client_id", "(unknown)"))
-    return _LOGIN_FORM.replace("__CLIENT_NAME__", client_name).replace("__HIDDEN__", hidden).replace("__ERROR__", err)
+    display_name = html.escape(client_name if client_name is not None else params.get("client_id", "(unknown)"))
+    return _LOGIN_FORM.replace("__CLIENT_NAME__", display_name).replace("__HIDDEN__", hidden).replace("__ERROR__", err)
 
 
 # ---------------------------------------------------------------- middleware
