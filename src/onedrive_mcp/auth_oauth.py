@@ -374,6 +374,19 @@ class OAuthGateway:
             return _oauth_error_response(exc.error, exc.description, 400)
         return _oauth_error_response("unsupported_grant_type", f"grant_type={grant_type!r}", 400)
 
+    @staticmethod
+    def _token_response(access: str, refresh: str, scope: str) -> JSONResponse:
+        """Build the RFC 6749 token-response object (single source of truth)."""
+        return JSONResponse(
+            {
+                "access_token": access,
+                "token_type": "Bearer",
+                "expires_in": ACCESS_TOKEN_TTL_SECONDS,
+                "refresh_token": refresh,
+                "scope": scope,
+            }
+        )
+
     def _token_authorization_code(self, form: Any) -> JSONResponse:
         code = form.get("code", "")
         client_id = form.get("client_id", "")
@@ -394,15 +407,7 @@ class OAuthGateway:
             record.used = True
         access = self._mint_access_token(client_id, record.scope)
         refresh = self._mint_refresh_token(client_id, record.scope)
-        return JSONResponse(
-            {
-                "access_token": access,
-                "token_type": "Bearer",
-                "expires_in": ACCESS_TOKEN_TTL_SECONDS,
-                "refresh_token": refresh,
-                "scope": record.scope,
-            }
-        )
+        return self._token_response(access, refresh, record.scope)
 
     def _token_refresh_token(self, form: Any) -> JSONResponse:
         token = form.get("refresh_token", "")
@@ -414,15 +419,7 @@ class OAuthGateway:
             raise OAuthError("invalid_grant", "client_id does not match this refresh_token")
         access = self._mint_access_token(client_id, record.scope)
         refresh = self._mint_refresh_token(client_id, record.scope)
-        return JSONResponse(
-            {
-                "access_token": access,
-                "token_type": "Bearer",
-                "expires_in": ACCESS_TOKEN_TTL_SECONDS,
-                "refresh_token": refresh,
-                "scope": record.scope,
-            }
-        )
+        return self._token_response(access, refresh, record.scope)
 
 
 class OAuthError(Exception):
