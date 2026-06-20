@@ -48,12 +48,6 @@ def _meta_response(
     return meta
 
 
-class _MockTransport(httpx.MockTransport if hasattr(httpx, "MockTransport") else object):
-    """httpx.MockTransport is available since httpx 0.23; provide a simple shim
-    for older versions by subclassing httpx.BaseTransport directly."""
-    pass
-
-
 def _build_mock_transport(responses: list[httpx.Response]) -> httpx.MockTransport:
     """Return a MockTransport that replays *responses* in order."""
     iterator = iter(responses)
@@ -68,7 +62,6 @@ def _build_mock_transport(responses: list[httpx.Response]) -> httpx.MockTranspor
 
 
 def _json_response(body: Any, status: int = 200) -> httpx.Response:
-    import json
     return httpx.Response(status, json=body)
 
 
