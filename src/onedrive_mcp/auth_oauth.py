@@ -209,11 +209,17 @@ class OAuthGateway:
             self._save_state()
         return token
 
-    def _consume_refresh_token(self, token: str) -> _RefreshToken:
+    def _consume_refresh_token(self, token: str, client_id: str) -> _RefreshToken:
         with self._lock:
-            data = self._refresh_tokens.pop(token, None)
+            data = self._refresh_tokens.get(token)
             if data is None or data.expires_at <= time.time():
                 raise OAuthError("invalid_grant", "refresh_token is invalid or expired")
+            # Validate the requesting client *before* burning the token, so a
+            # request with a valid refresh_token but the wrong client_id cannot
+            # DoS the legitimate client by destroying its token (issue #17).
+            if data.client_id != client_id:
+                raise OAuthError("invalid_grant", "client_id does not match this refresh_token")
+            del self._refresh_tokens[token]
             self._save_state()
         return data
 
@@ -414,9 +420,7 @@ class OAuthGateway:
         client_id = form.get("client_id", "")
         if not token or not client_id:
             raise OAuthError("invalid_request", "refresh_token and client_id are required")
-        record = self._consume_refresh_token(token)
-        if record.client_id != client_id:
-            raise OAuthError("invalid_grant", "client_id does not match this refresh_token")
+        record = self._consume_refresh_token(token, client_id)
         access = self._mint_access_token(client_id, record.scope)
         refresh = self._mint_refresh_token(client_id, record.scope)
         return self._token_response(access, refresh, record.scope)
